@@ -13,13 +13,13 @@ except KeyError:
     exit(1)
 
 # --- GLOBAL VARIABLES ---
-# ⚠️ Update these IDs to match your server.
-GUILD_ID = 1432940470102659194      
+# ⚠️ Ensure these IDs are set to valid numbers or None if not used.
+# **Use the IDs you committed: 1432940470102659194, 1439321682803167242, 1434347506778505319**
+GUILD_ID = 1432940470102659194     
 SUPPORT_CATEGORY_ID = 1439321682803167242 
 SUPPORT_ROLE_ID = 1434347506778505319     
 
 # Store active threads: {user_id: thread_channel_id}
-# This dictionary will now remain stable in memory, fixing the channel splitting.
 active_tickets = {} 
 
 # 🌟 DEFINITIVE FIX: Set to track IDs to prevent the bot from responding multiple times
