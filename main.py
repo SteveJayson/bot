@@ -13,8 +13,7 @@ except KeyError:
     exit(1)
 
 # --- GLOBAL VARIABLES ---
-# ⚠️ Ensure these IDs are set to valid numbers or None if not used.
-# **Use the IDs you committed: 1432940470102659194, 1439321682803167242, 1434347506778505319**
+# ⚠️ IDs confirmed by user
 GUILD_ID = 1432940470102659194     
 SUPPORT_CATEGORY_ID = 1439321682803167242 
 SUPPORT_ROLE_ID = 1434347506778505319     
@@ -56,6 +55,7 @@ async def close(ctx):
     if ctx.channel.id not in active_tickets.values():
         return await ctx.send("This is not an active support ticket channel.")
     
+    # Safely find the user ID
     user_id = next((k for k, v in active_tickets.items() if v == ctx.channel.id), None)
     
     if user_id:
@@ -74,7 +74,7 @@ async def close(ctx):
         await ctx.send("Error: Could not find the associated user for this ticket.")
 
 # ----------------------------------------------------------------------
-# --- MESSAGE HANDLING ---
+# --- MESSAGE HANDLING (Added crash safety for forwarding) ---
 # ----------------------------------------------------------------------
 
 @bot.event
@@ -95,29 +95,37 @@ async def on_message(message):
         
         if user.id in active_tickets: 
             # Ticket is active: Forward DM to the server channel
-            channel_id = active_tickets[user.id]
-            support_channel = bot.get_channel(channel_id)
-            
-            if support_channel:
-                # --- Attachment Forwarding: User to Staff ---
-                attachment_info = ""
-                if message.attachments:
-                    attachments = [f"[{i+1}. {a.filename}]({a.url})" for i, a in enumerate(message.attachments)]
-                    attachment_info = "\n\n**Attachments (Clickable Links):**\n" + "\n".join(attachments)
-
-                embed = discord.Embed(
-                    title=f"📩 New Message from {user.name} (DM)",
-                    description=message.content + attachment_info, 
-                    color=discord.Color.blue()
-                )
-                embed.set_footer(text="To reply, type your message in this channel.")
+            try:
+                channel_id = active_tickets[user.id]
+                support_channel = bot.get_channel(channel_id)
                 
-                if message.attachments and message.attachments[0].content_type.startswith('image'):
-                    embed.set_image(url=message.attachments[0].url)
+                if support_channel:
+                    # --- Attachment Forwarding: User to Staff ---
+                    attachment_info = ""
+                    if message.attachments:
+                        attachments = [f"[{i+1}. {a.filename}]({a.url})" for i, a in enumerate(message.attachments)]
+                        attachment_info = "\n\n**Attachments (Clickable Links):**\n" + "\n".join(attachments)
 
-                await support_channel.send(embed=embed)
-                await message.channel.send("Your message has been forwarded to the support team.")
-        
+                    embed = discord.Embed(
+                        title=f"📩 New Message from {user.name} (DM)",
+                        description=message.content + attachment_info, 
+                        color=discord.Color.blue()
+                    )
+                    embed.set_footer(text="To reply, type your message in this channel.")
+                    
+                    if message.attachments and message.attachments[0].content_type.startswith('image'):
+                        embed.set_image(url=message.attachments[0].url)
+
+                    await support_channel.send(embed=embed)
+                    await message.channel.send("Your message has been forwarded to the support team.")
+            except KeyError:
+                # CRASH SAFETY: This handles if active_tickets somehow contains a bad key/value
+                print(f"Error: active_tickets dictionary missing key for user {user.id}")
+                await message.channel.send("An internal error occurred while forwarding your message. Please try again or create a new ticket.")
+            except Exception as e:
+                # Catch any other forwarding errors without crashing the process
+                print(f"Unexpected error during DM forwarding: {e}")
+                
         else:
             # No active ticket: Send auto-response with button
             view = discord.ui.View()
@@ -132,6 +140,7 @@ async def on_message(message):
     # === SECTION 2: Message in Staff Channel (Forward to User DM) ===
     elif message.guild and message.guild.id == GUILD_ID and message.channel.id in active_tickets.values():
         
+        # Safely find the user ID
         user_id = next((k for k, v in active_tickets.items() if v == message.channel.id), None)
         
         if user_id:
@@ -152,13 +161,17 @@ async def on_message(message):
                 
                 if message.attachments and message.attachments[0].content_type.startswith('image'):
                     reply_embed.set_image(url=message.attachments[0].url)
-
-                await user.send(embed=reply_embed)
-
+                
+                try:
+                    await user.send(embed=reply_embed)
+                except discord.HTTPException:
+                    # CRASH SAFETY: Fails gracefully if user DMs are closed
+                    print(f"Could not send DM to user {user.id}. DMs likely closed.")
+                    
     await bot.process_commands(message)
 
 # ----------------------------------------------------------------------
-# --- INTERACTIONS (Includes crash prevention) ---
+# --- INTERACTIONS (Crash prevention confirmed) ---
 # ----------------------------------------------------------------------
 
 @bot.event
@@ -176,6 +189,7 @@ async def on_interaction(interaction):
         # 1. Check for active ticket, and use try/except to prevent crash on duplicate event
         if user.id in active_tickets:
             try:
+                # This handles the case where the interaction event is received a second time
                 return await interaction.response.send_message("🛑 You already have an active support thread!", ephemeral=True)
             except discord.HTTPException:
                 # Safely ignore if the interaction was already acknowledged by a successful parallel event
