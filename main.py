@@ -121,7 +121,7 @@ async def on_message(message):
                 await message.channel.send("Your message has been forwarded to the support team.")
         
         else:
-            # No active ticket: Send auto-response with button (FIXED: Single response)
+           # No active ticket: Send auto-response with button
             view = discord.ui.View()
             view.add_item(discord.ui.Button(label="Open Support Thread", custom_id="open_ticket", style=discord.ButtonStyle.green))
             
@@ -129,8 +129,11 @@ async def on_message(message):
                 "👋 Hello! Thanks for reaching out. Are you sure you want to contact staff? Click the button below to confirm and open a support thread.",
                 view=view
             )
-            # 🌟 BUG FIX: Stops processing to prevent the double-message issue
-            return
+            
+            # 🌟 BUG FIX: ADD THIS LINE to stop processing the message
+            return # <--- This prevents the second message
+            
+    # ... (Rest of the on_message function) ...
 
     # === SECTION 2: Message in Staff Channel (Forward to User DM) ===
     elif message.guild and message.guild.id == GUILD_ID and message.channel.id in active_tickets.values():
