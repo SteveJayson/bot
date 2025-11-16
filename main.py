@@ -3,13 +3,12 @@ from discord.ext import commands
 import discord.ui
 # --- SECURE CONFIGURATION ---
 import os 
-from keep_alive import keep_alive # Imports the uptime server
+from keep_alive import keep_alive 
 
 # ⚠️ 1. Get the token securely from the Railway Environment Variables/Secrets
 try:
     BOT_TOKEN = os.environ['BOT_TOKEN']
 except KeyError:
-    # Handles the KeyError: 'BOT_TOKEN' error
     print("FATAL ERROR: The BOT_TOKEN environment variable is not set in Railway's Variables tab.")
     exit(1)
 
@@ -74,7 +73,7 @@ async def close(ctx):
         await ctx.send("Error: Could not find the associated user for this ticket.")
 
 # ----------------------------------------------------------------------
-# --- MESSAGE HANDLING (Includes the main fix) ---
+# --- MESSAGE HANDLING ---
 # ----------------------------------------------------------------------
 
 @bot.event
@@ -83,18 +82,16 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
-    # 🌟 DEFINITIVE FIX: If the ID is already in the set, ignore the message
+    # 🌟 FIX: Check for duplicate message ID to stop the multiple welcome messages
     if message.id in last_processed_dm_ids:
         return 
     
-    # Add the ID to the set before processing it
     last_processed_dm_ids.add(message.id)
 
     # === SECTION 1: DM from User to Bot (Forward to Staff) ===
     if isinstance(message.channel, discord.DMChannel):
         user = message.author
         
-        # Check if user has an active ticket. If this check fails, the messages split.
         if user.id in active_tickets: 
             # Ticket is active: Forward DM to the server channel
             channel_id = active_tickets[user.id]
@@ -121,7 +118,7 @@ async def on_message(message):
                 await message.channel.send("Your message has been forwarded to the support team.")
         
         else:
-            # No active ticket: Send auto-response with button (Sends only once due to ID check above)
+            # No active ticket: Send auto-response with button
             view = discord.ui.View()
             view.add_item(discord.ui.Button(label="Open Support Thread", custom_id="open_ticket", style=discord.ButtonStyle.green))
             
@@ -160,7 +157,7 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # ----------------------------------------------------------------------
-# --- INTERACTIONS ---
+# --- INTERACTIONS (Includes crash prevention) ---
 # ----------------------------------------------------------------------
 
 @bot.event
@@ -175,9 +172,13 @@ async def on_interaction(interaction):
         if not guild or not category:
             return await interaction.response.send_message("❌ Configuration Error: Guild or Category not found. Please contact a server admin.", ephemeral=True)
             
-        # Stop if user already has an active ticket
+        # Check for active ticket, and use try/except for the acknowledgement check
         if user.id in active_tickets:
-            return await interaction.response.send_message("🛑 You already have an active support thread!", ephemeral=True)
+            try:
+                return await interaction.response.send_message("🛑 You already have an active support thread!", ephemeral=True)
+            except discord.HTTPException:
+                # Safely ignore if the interaction was already acknowledged by a successful parallel event
+                return
             
         channel_name = f"ticket-{user.name.lower().replace(' ', '-')}"
         
@@ -191,11 +192,19 @@ async def on_interaction(interaction):
         # Add the new ticket to the dictionary (Bot memory)
         active_tickets[user.id] = new_channel.id 
         
-        # Confirmation message in DM
-        await interaction.response.edit_message(
-            content=f"✅ **Thread Created!** The staff team will get back to you soon. All your future DMs will be sent to the staff. See {new_channel.mention}",
-            view=None
-        )
+        # 🌟 CRITICAL CRASH PREVENTION FIX: Handle the 'Interaction has already been acknowledged' error (40060)
+        try:
+            # Acknowledges the interaction and sends confirmation message
+            await interaction.response.edit_message(
+                content=f"✅ **Thread Created!** The staff team will get back to you soon. All your future DMs will be sent to the staff. See {new_channel.mention}",
+                view=None
+            )
+        except discord.errors.HTTPException as e:
+            # This handles the repeated event that would otherwise crash the bot
+            if e.code == 40060: 
+                pass 
+            else:
+                raise # Re-raise other errors
         
         staff_embed = discord.Embed(
             title="🎫 NEW SUPPORT TICKET",
@@ -203,7 +212,6 @@ async def on_interaction(interaction):
             color=discord.Color.green()
         )
         
-        # Mention the specific support role
         support_role = f"<@&{SUPPORT_ROLE_ID}>" 
         await new_channel.send(f"Hey {support_role}, a new ticket has been opened by {user.mention}!", embed=staff_embed)
 
