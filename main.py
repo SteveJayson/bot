@@ -35,7 +35,7 @@ intents.members = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # ----------------------------------------------------------------------
-# --- BOT EVENTS & COMMANDS (Same as before) ---
+# --- BOT EVENTS & COMMANDS ---
 # ----------------------------------------------------------------------
 
 @bot.event
@@ -94,7 +94,8 @@ async def on_message(message):
     if isinstance(message.channel, discord.DMChannel):
         user = message.author
         
-        if user.id in active_tickets:
+        # This check should be successful for subsequent messages, preventing new tickets.
+        if user.id in active_tickets: 
             # Ticket is active: Forward DM to the server channel
             channel_id = active_tickets[user.id]
             support_channel = bot.get_channel(channel_id)
@@ -120,7 +121,7 @@ async def on_message(message):
                 await message.channel.send("Your message has been forwarded to the support team.")
         
         else:
-            # No active ticket: Send auto-response with button (Fixed for single response)
+            # No active ticket: Send auto-response with button
             view = discord.ui.View()
             view.add_item(discord.ui.Button(label="Open Support Thread", custom_id="open_ticket", style=discord.ButtonStyle.green))
             
@@ -128,7 +129,6 @@ async def on_message(message):
                 "👋 Hello! Thanks for reaching out. Are you sure you want to contact staff? Click the button below to confirm and open a support thread.",
                 view=view
             )
-            # This return prevents further execution in this event, but the ID check is the main fix.
             return
 
     # === SECTION 2: Message in Staff Channel (Forward to User DM) ===
@@ -160,7 +160,7 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # ----------------------------------------------------------------------
-# --- INTERACTIONS (Same as before) ---
+# --- INTERACTIONS ---
 # ----------------------------------------------------------------------
 
 @bot.event
@@ -188,7 +188,8 @@ async def on_interaction(interaction):
             topic=f"Support ticket for user ID: {user.id}"
         )
         
-        active_tickets[user.id] = new_channel.id
+        # Add the new ticket to the dictionary (Bot memory)
+        active_tickets[user.id] = new_channel.id 
         
         # Confirmation message in DM
         await interaction.response.edit_message(
