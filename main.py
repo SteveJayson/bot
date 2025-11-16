@@ -9,6 +9,7 @@ from keep_alive import keep_alive
 try:
     BOT_TOKEN = os.environ['BOT_TOKEN']
 except KeyError:
+    # Print a clear error to the Railway logs and exit
     print("FATAL ERROR: The BOT_TOKEN environment variable is not set in Railway's Variables tab.")
     exit(1)
 
@@ -21,8 +22,8 @@ SUPPORT_ROLE_ID = 1434347506778505319
 # Store active threads: {user_id: thread_channel_id}
 active_tickets = {} 
 
-# 🌟 NEW FIX: Store IDs of recently processed messages to prevent duplicate responses
-# We use a set for quick lookups. Note: This set will grow until the bot restarts.
+# 🌟 DEFINITIVE FIX: Store IDs of recently processed messages to prevent duplicate responses
+# This set tracks unique messages to handle the Discord API's tendency to send events twice.
 last_processed_dm_ids = set() 
 
 # --- INTENTS ---
@@ -34,7 +35,7 @@ intents.members = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # ----------------------------------------------------------------------
-# --- BOT EVENTS ---
+# --- BOT EVENTS & COMMANDS (Same as before) ---
 # ----------------------------------------------------------------------
 
 @bot.event
@@ -47,10 +48,6 @@ async def on_ready():
         type=discord.ActivityType.watching
     )
     await bot.change_presence(status=discord.Status.online, activity=activity)
-
-# ----------------------------------------------------------------------
-# --- COMMANDS ---
-# ----------------------------------------------------------------------
 
 @bot.command()
 @commands.has_permissions(manage_channels=True) 
@@ -78,7 +75,7 @@ async def close(ctx):
         await ctx.send("Error: Could not find the associated user for this ticket.")
 
 # ----------------------------------------------------------------------
-# --- MESSAGE HANDLING ---
+# --- MESSAGE HANDLING (Updated with ID check) ---
 # ----------------------------------------------------------------------
 
 @bot.event
@@ -87,7 +84,7 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
-    # 🌟 DEFINITIVE DOUBLE-MESSAGE FIX: Ignore duplicate message events
+    # 🌟 FIX: Check for duplicate message ID to stop the double-response bug
     if message.id in last_processed_dm_ids:
         return 
     
@@ -118,7 +115,6 @@ async def on_message(message):
                 
                 if message.attachments and message.attachments[0].content_type.startswith('image'):
                     embed.set_image(url=message.attachments[0].url)
-                # ----------------------------------------------
 
                 await support_channel.send(embed=embed)
                 await message.channel.send("Your message has been forwarded to the support team.")
@@ -132,7 +128,7 @@ async def on_message(message):
                 "👋 Hello! Thanks for reaching out. Are you sure you want to contact staff? Click the button below to confirm and open a support thread.",
                 view=view
             )
-            # The 'return' is kept for redundancy, but the ID check handles the main issue.
+            # This return prevents further execution in this event, but the ID check is the main fix.
             return
 
     # === SECTION 2: Message in Staff Channel (Forward to User DM) ===
@@ -158,14 +154,13 @@ async def on_message(message):
                 
                 if message.attachments and message.attachments[0].content_type.startswith('image'):
                     reply_embed.set_image(url=message.attachments[0].url)
-                # -----------------------------------------------------------
 
                 await user.send(embed=reply_embed)
 
     await bot.process_commands(message)
 
 # ----------------------------------------------------------------------
-# --- INTERACTIONS ---
+# --- INTERACTIONS (Same as before) ---
 # ----------------------------------------------------------------------
 
 @bot.event
