@@ -1,5 +1,6 @@
 from flask import Flask
-import os 
+from threading import Thread
+import os
 
 app = Flask('')
 
@@ -7,6 +8,11 @@ app = Flask('')
 def home():
     return "Bot is awake and running!"
 
-def keep_alive():  
-    # Gunicorn handles the running process, so we just run the bot.
-    pass
+def run():
+    # Railway sets the port environment variable, use that if available
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
