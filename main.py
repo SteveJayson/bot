@@ -3,13 +3,13 @@ from discord.ext import commands
 import discord.ui
 # --- SECURE CONFIGURATION ---
 import os 
-from keep_alive import keep_alive 
+from keep_alive import keep_alive # Imports the uptime server
 
 # ⚠️ 1. Get the token securely from the Railway Environment Variables/Secrets
 try:
     BOT_TOKEN = os.environ['BOT_TOKEN']
 except KeyError:
-    # Print a clear error to the Railway logs and exit
+    # Handles the KeyError: 'BOT_TOKEN' error
     print("FATAL ERROR: The BOT_TOKEN environment variable is not set in Railway's Variables tab.")
     exit(1)
 
@@ -22,8 +22,7 @@ SUPPORT_ROLE_ID = 1434347506778505319
 # Store active threads: {user_id: thread_channel_id}
 active_tickets = {} 
 
-# 🌟 DEFINITIVE FIX: Store IDs of recently processed messages to prevent duplicate responses
-# This set tracks unique messages to handle the Discord API's tendency to send events twice.
+# 🌟 DEFINITIVE FIX: Set to track IDs to prevent the bot from responding multiple times
 last_processed_dm_ids = set() 
 
 # --- INTENTS ---
@@ -75,7 +74,7 @@ async def close(ctx):
         await ctx.send("Error: Could not find the associated user for this ticket.")
 
 # ----------------------------------------------------------------------
-# --- MESSAGE HANDLING (Updated with ID check) ---
+# --- MESSAGE HANDLING (Includes the main fix) ---
 # ----------------------------------------------------------------------
 
 @bot.event
@@ -84,17 +83,18 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
-    # 🌟 FIX: Check for duplicate message ID to stop the double-response bug
+    # 🌟 DEFINITIVE FIX: If the ID is already in the set, ignore the message
     if message.id in last_processed_dm_ids:
         return 
     
+    # Add the ID to the set before processing it
     last_processed_dm_ids.add(message.id)
 
     # === SECTION 1: DM from User to Bot (Forward to Staff) ===
     if isinstance(message.channel, discord.DMChannel):
         user = message.author
         
-        # This check should be successful for subsequent messages, preventing new tickets.
+        # Check if user has an active ticket. If this check fails, the messages split.
         if user.id in active_tickets: 
             # Ticket is active: Forward DM to the server channel
             channel_id = active_tickets[user.id]
@@ -121,7 +121,7 @@ async def on_message(message):
                 await message.channel.send("Your message has been forwarded to the support team.")
         
         else:
-            # No active ticket: Send auto-response with button
+            # No active ticket: Send auto-response with button (Sends only once due to ID check above)
             view = discord.ui.View()
             view.add_item(discord.ui.Button(label="Open Support Thread", custom_id="open_ticket", style=discord.ButtonStyle.green))
             
