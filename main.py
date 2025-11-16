@@ -3,25 +3,27 @@ from discord.ext import commands
 import discord.ui
 # --- SECURE CONFIGURATION ---
 import os 
-from keep_alive import keep_alive # ⚠️ Must have a file named keep_alive.py
+from keep_alive import keep_alive 
 
 # ⚠️ 1. Get the token securely from the Railway Environment Variables/Secrets
-# If the variable 'BOT_TOKEN' is not set in the Railway dashboard, this will fail.
 try:
     BOT_TOKEN = os.environ['BOT_TOKEN']
 except KeyError:
-    # Print a clear error to the Railway logs and exit
     print("FATAL ERROR: The BOT_TOKEN environment variable is not set in Railway's Variables tab.")
     exit(1)
 
-# --- GUILD CONFIGURATION (You MUST change these to your actual IDs) ---
-# Use the IDs you determined for your server.
+# --- GLOBAL VARIABLES ---
+# ⚠️ Update these IDs to match your server.
 GUILD_ID = 1432940470102659194      
 SUPPORT_CATEGORY_ID = 1439321682803167242 
 SUPPORT_ROLE_ID = 1434347506778505319     
 
 # Store active threads: {user_id: thread_channel_id}
 active_tickets = {} 
+
+# 🌟 NEW FIX: Store IDs of recently processed messages to prevent duplicate responses
+# We use a set for quick lookups. Note: This set will grow until the bot restarts.
+last_processed_dm_ids = set() 
 
 # --- INTENTS ---
 intents = discord.Intents.default()
@@ -58,7 +60,6 @@ async def close(ctx):
     if ctx.channel.id not in active_tickets.values():
         return await ctx.send("This is not an active support ticket channel.")
     
-    # Find the user ID associated with this channel ID
     user_id = next((k for k, v in active_tickets.items() if v == ctx.channel.id), None)
     
     if user_id:
@@ -86,6 +87,12 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
+    # 🌟 DEFINITIVE DOUBLE-MESSAGE FIX: Ignore duplicate message events
+    if message.id in last_processed_dm_ids:
+        return 
+    
+    last_processed_dm_ids.add(message.id)
+
     # === SECTION 1: DM from User to Bot (Forward to Staff) ===
     if isinstance(message.channel, discord.DMChannel):
         user = message.author
@@ -109,7 +116,6 @@ async def on_message(message):
                 )
                 embed.set_footer(text="To reply, type your message in this channel.")
                 
-                # Check for image attachment to set as embed image
                 if message.attachments and message.attachments[0].content_type.startswith('image'):
                     embed.set_image(url=message.attachments[0].url)
                 # ----------------------------------------------
@@ -118,7 +124,7 @@ async def on_message(message):
                 await message.channel.send("Your message has been forwarded to the support team.")
         
         else:
-            # No active ticket: Send auto-response with button (FIXED: Single response)
+            # No active ticket: Send auto-response with button (Fixed for single response)
             view = discord.ui.View()
             view.add_item(discord.ui.Button(label="Open Support Thread", custom_id="open_ticket", style=discord.ButtonStyle.green))
             
@@ -126,8 +132,7 @@ async def on_message(message):
                 "👋 Hello! Thanks for reaching out. Are you sure you want to contact staff? Click the button below to confirm and open a support thread.",
                 view=view
             )
-            
-            # 🌟 DOUBLE-MESSAGE BUG FIX: Stops processing here
+            # The 'return' is kept for redundancy, but the ID check handles the main issue.
             return
 
     # === SECTION 2: Message in Staff Channel (Forward to User DM) ===
@@ -151,7 +156,6 @@ async def on_message(message):
                 )
                 reply_embed.set_footer(text=f"Sent by {message.author.display_name}")
                 
-                # Check for image attachment to set as embed image
                 if message.attachments and message.attachments[0].content_type.startswith('image'):
                     reply_embed.set_image(url=message.attachments[0].url)
                 # -----------------------------------------------------------
