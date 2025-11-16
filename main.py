@@ -42,20 +42,22 @@ async def on_ready():
     print(f'Bot is logged in as {bot.user}')
 
     activity = discord.Activity(
-        name="for DMs | Support Online", 
+        name="for DMs | Support Online.", 
         type=discord.ActivityType.watching
     )
     await bot.change_presence(status=discord.Status.online, activity=activity)
 
 @bot.command()
-@commands.has_permissions(manage_channels=True) 
+@commands.has_role(SUPPORT_ROLE_ID) # 🔑 RESTRICTS command usage to ONLY the SUPPORT_ROLE_ID
 async def close(ctx):
     """Closes the current support ticket (channel)."""
     
     if ctx.channel.id not in active_tickets.values():
-        return await ctx.send("This is not an active support ticket channel.")
+        try:
+            return await ctx.send("This is not an active support ticket channel.")
+        except Exception:
+            return
     
-    # Safely find the user ID
     user_id = next((k for k, v in active_tickets.items() if v == ctx.channel.id), None)
     
     if user_id:
@@ -73,8 +75,20 @@ async def close(ctx):
     else:
         await ctx.send("Error: Could not find the associated user for this ticket.")
 
+@close.error
+async def close_error(ctx, error):
+    """Handles the error when a user without the support role tries to use !close."""
+    if isinstance(error, commands.MissingRole):
+        await ctx.send("🛑 You do not have the required role to close a ticket.")
+    elif isinstance(error, commands.NoPrivateMessage):
+        pass # Command cannot be used in DMs anyway
+    else:
+        # For general errors during command execution
+        print(f"Error in !close command: {error}")
+
+
 # ----------------------------------------------------------------------
-# --- MESSAGE HANDLING (Added crash safety for forwarding) ---
+# --- MESSAGE HANDLING (Includes crash safety for forwarding) ---
 # ----------------------------------------------------------------------
 
 @bot.event
