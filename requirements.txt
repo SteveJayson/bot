@@ -1,3 +1,2 @@
 discord.py
 flask
-gunicorn # Required for stable production hosting on Railway
