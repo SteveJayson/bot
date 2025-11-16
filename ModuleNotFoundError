@@ -1,3 +1,0 @@
-git add requirements.txt Procfile
-git commit -m "Add files to install discord.py and start bot"
-git push
