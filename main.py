@@ -3,24 +3,22 @@ from discord.ext import commands
 import discord.ui
 # --- SECURE CONFIGURATION ---
 import os 
-from keep_alive import keep_alive # The uptime function from Replit/Flask
+from keep_alive import keep_alive # ⚠️ Must have a file named keep_alive.py
 
 # ⚠️ 1. Get the token securely from the Railway Environment Variables/Secrets
-# If this variable is not set in the Railway dashboard, you will get a KeyError.
-# The key name MUST be exactly 'BOT_TOKEN'.
+# If the variable 'BOT_TOKEN' is not set in the Railway dashboard, this will fail.
 try:
     BOT_TOKEN = os.environ['BOT_TOKEN']
 except KeyError:
-    # Fail gracefully if the variable is missing
-    print("FATAL ERROR: The BOT_TOKEN environment variable is not set.")
+    # Print a clear error to the Railway logs and exit
+    print("FATAL ERROR: The BOT_TOKEN environment variable is not set in Railway's Variables tab.")
     exit(1)
 
 # --- GUILD CONFIGURATION (You MUST change these to your actual IDs) ---
-# NOTE: Railway environment variables are always strings.
-# You must manually enter these as fixed numbers below or use os.environ and cast them to int.
-GUILD_ID = 1432940470102659194      # ID of your main Discord server
-SUPPORT_CATEGORY_ID = 1439321682803167242 # ID of the Category for tickets
-SUPPORT_ROLE_ID = 1434347506778505319     # ID of the role to mention for new tickets
+# Use the IDs you determined for your server.
+GUILD_ID = 1432940470102659194      
+SUPPORT_CATEGORY_ID = 1439321682803167242 
+SUPPORT_ROLE_ID = 1434347506778505319     
 
 # Store active threads: {user_id: thread_channel_id}
 active_tickets = {} 
@@ -69,7 +67,6 @@ async def close(ctx):
             try:
                 await user.send("✅ Your support thread has been closed by the staff team. Thank you for contacting support!")
             except discord.HTTPException:
-                # User may have disabled DMs
                 print(f"Could not DM user {user.id} to confirm ticket closure.")
         
         await ctx.send("Deleting channel and closing ticket...")
@@ -121,7 +118,7 @@ async def on_message(message):
                 await message.channel.send("Your message has been forwarded to the support team.")
         
         else:
-           # No active ticket: Send auto-response with button
+            # No active ticket: Send auto-response with button (FIXED: Single response)
             view = discord.ui.View()
             view.add_item(discord.ui.Button(label="Open Support Thread", custom_id="open_ticket", style=discord.ButtonStyle.green))
             
@@ -130,10 +127,8 @@ async def on_message(message):
                 view=view
             )
             
-            # 🌟 BUG FIX: ADD THIS LINE to stop processing the message
-            return # <--- This prevents the second message
-            
-    # ... (Rest of the on_message function) ...
+            # 🌟 DOUBLE-MESSAGE BUG FIX: Stops processing here
+            return
 
     # === SECTION 2: Message in Staff Channel (Forward to User DM) ===
     elif message.guild and message.guild.id == GUILD_ID and message.channel.id in active_tickets.values():
@@ -214,9 +209,5 @@ async def on_interaction(interaction):
 
 
 # --- Run the Bot ---
-# Note: You should be running a basic web server in a separate process or thread 
-# (like keep_alive.py with Flask) to keep the Railway service running 24/7.
-# Railway's free tier is limited to 500 hours/month, so a dedicated web server
-# for pings is usually necessary to use those hours efficiently.
 keep_alive() 
 bot.run(BOT_TOKEN)
