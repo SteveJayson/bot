@@ -156,43 +156,26 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-# ----------------------------------------------------------------------
 # --- INTERACTIONS (Includes crash prevention) ---
-# ----------------------------------------------------------------------
-
+# ...
 @bot.event
 async def on_interaction(interaction):
     """Handles button clicks for creating a ticket."""
     
     if interaction.type == discord.InteractionType.component and interaction.data.get('custom_id') == "open_ticket":
-        user = interaction.user
-        guild = bot.get_guild(GUILD_ID)
-        category = discord.utils.get(guild.categories, id=SUPPORT_CATEGORY_ID)
+        # ... (user, guild, category setup) ...
         
-        if not guild or not category:
-            return await interaction.response.send_message("❌ Configuration Error: Guild or Category not found. Please contact a server admin.", ephemeral=True)
-            
-        # Check for active ticket, and use try/except for the acknowledgement check
+        # 1. CRITICAL: Handle the 'already active' check safely to prevent crash on duplicate event
         if user.id in active_tickets:
             try:
                 return await interaction.response.send_message("🛑 You already have an active support thread!", ephemeral=True)
             except discord.HTTPException:
-                # Safely ignore if the interaction was already acknowledged by a successful parallel event
+                # Safely ignore if the interaction was already acknowledged
                 return
             
-        channel_name = f"ticket-{user.name.lower().replace(' ', '-')}"
+        # ... (create_text_channel code) ...
         
-        # Create the support channel
-        new_channel = await guild.create_text_channel(
-            channel_name, 
-            category=category,
-            topic=f"Support ticket for user ID: {user.id}"
-        )
-        
-        # Add the new ticket to the dictionary (Bot memory)
-        active_tickets[user.id] = new_channel.id 
-        
-        # 🌟 CRITICAL CRASH PREVENTION FIX: Handle the 'Interaction has already been acknowledged' error (40060)
+        # 2. CRITICAL: Handle the crash when acknowledging the new channel
         try:
             # Acknowledges the interaction and sends confirmation message
             await interaction.response.edit_message(
@@ -200,11 +183,13 @@ async def on_interaction(interaction):
                 view=None
             )
         except discord.errors.HTTPException as e:
-            # This handles the repeated event that would otherwise crash the bot
+            # If the interaction was already acknowledged (40060), skip the crash
             if e.code == 40060: 
                 pass 
             else:
                 raise # Re-raise other errors
+        
+        # ... (rest of the code to send staff embed) ...
         
         staff_embed = discord.Embed(
             title="🎫 NEW SUPPORT TICKET",
